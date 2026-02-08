@@ -1,0 +1,30 @@
+# Player MK1 Configuration
+
+vision:
+  region: null             # null = full screen, or [x, y, width, height]
+  resize: [1280, 720]      # Resize for processing
+  fps: 60                  # Vision capture rate
+
+brain:
+  # LLM config (strategic layer only)
+  provider: "openai"
+  model: "gpt-4o"
+  
+  # Layer frequencies
+  reaction:
+    fps: 120               # Reaction checks per second
+  
+  tactical:
+    fps: 20                # Tactical ticks per second
+  
+  strategic_interval_ms: 5000  # Strategic review interval
+
+operator:
+  action_delay_ms: 30      # Min delay between actions
+  safety:
+    enabled: true
+    kill_key: "f12"
+    max_actions_per_sec: 50
+
+logging:
+  level: "INFO"

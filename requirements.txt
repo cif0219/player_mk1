@@ -1,0 +1,16 @@
+# Vision
+mss>=9.0.0
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Brain
+openai>=1.0.0
+anthropic>=0.18.0
+google-generativeai>=0.4.0
+
+# Operator
+pynput>=1.7.6
+pyautogui>=0.9.54
+
+# Utils
+pyyaml>=6.0
