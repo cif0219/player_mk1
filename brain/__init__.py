@@ -1,6 +1,6 @@
 """
 Player MK1 - Brain Module
-Async three-layer decision architecture
+Async three-layer decision architecture with commander interface
 """
 
 from .reaction import (
@@ -15,7 +15,8 @@ from .tactical import (
 )
 from .strategic import (
     StrategicLayer, StrategicThread,
-    StrategicState, StrategicDecision
+    StrategicState, StrategicDecision,
+    Commander, CommanderDirective, QueueCommander, WebSocketCommander
 )
 
 __all__ = [
@@ -29,4 +30,6 @@ __all__ = [
     # Strategic
     "StrategicLayer", "StrategicThread",
     "StrategicState", "StrategicDecision",
+    # Commander interface
+    "Commander", "CommanderDirective", "QueueCommander", "WebSocketCommander",
 ]
