@@ -1,5 +1,5 @@
 """
-Tactical Layer (戰術層)
+Tactical Layer
 Async goal execution at medium frequency.
 Manages reaction rules dynamically based on current situation.
 Target: 10-30 Hz

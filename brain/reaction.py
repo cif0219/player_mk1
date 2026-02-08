@@ -1,5 +1,5 @@
 """
-Reaction Layer (反應層)
+Reaction Layer
 Async ultra-fast responses using pure math and pattern matching.
 Runs in dedicated thread at highest frequency.
 Target latency: <1ms per check

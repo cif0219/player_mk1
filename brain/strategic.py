@@ -1,5 +1,5 @@
 """
-Strategic Layer (戰略層)
+Strategic Layer
 Async high-level decision making using LLMs.
 Includes interface for external commanders (user, AI assistant, etc.)
 """
