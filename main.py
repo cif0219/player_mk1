@@ -43,7 +43,7 @@ from brain import ReactionLayer, TacticalLayer
 from brain.reaction import ReactionThread, ReactionRule, PixelTrigger
 from brain.tactical import TacticalThread, Goal, WaitBehavior, SequenceBehavior, RepeatBehavior
 from brain.strategic import StrategicLayer, StrategicThread
-from operator import Operator, SafetyConfig
+from player_operator import Operator, SafetyConfig
 
 
 class OperatorThread(threading.Thread):
@@ -122,6 +122,11 @@ class Player:
         self.tactical_layer.register_behavior(SequenceBehavior())
         self.tactical_layer.register_behavior(RepeatBehavior())
         
+        # Register custom game behaviors
+        from brain.behaviors import CombatBehavior, NavigateBehavior
+        self.tactical_layer.register_behavior(CombatBehavior())
+        self.tactical_layer.register_behavior(NavigateBehavior())
+
         # Brain threads
         reaction_cfg = self.config["brain"].get("reaction", {})
         self.reaction_thread = ReactionThread(
@@ -259,11 +264,12 @@ def main():
     parser = argparse.ArgumentParser(description="Player MK1 - Async Game Player")
     parser.add_argument("-c", "--config", default="config.yaml", help="Config file")
     parser.add_argument("-t", "--time", type=float, help="Run duration (seconds)")
-    parser.add_argument("--objectives", nargs="+", help="Strategic objectives")
+    parser.add_argument("--objectives", nargs="+", help="Strategic objectives", default=["Defeat enemies in the central area"])
     args = parser.parse_args()
     
     player = Player(config_path=args.config)
     
+    # We always set up objectives to demonstrate the game capability
     if args.objectives:
         player.setup_objectives(args.objectives)
     
