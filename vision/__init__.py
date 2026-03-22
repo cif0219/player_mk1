@@ -111,7 +111,13 @@ class VisionThread(threading.Thread):
         # Stats
         self.actual_fps = 0.0
         self._fps_samples: list[float] = []
+        self._region_lock = threading.Lock()
     
+    def set_region(self, region: Optional[Tuple[int, int, int, int]]):
+        """Dynamically update the capture region."""
+        with self._region_lock:
+            self.region = region
+
     def run(self):
         self._sct = mss.mss()
         self._running = True
@@ -141,8 +147,11 @@ class VisionThread(threading.Thread):
     
     def _capture(self) -> np.ndarray:
         """Capture a single frame."""
-        if self.region:
-            x, y, w, h = self.region
+        with self._region_lock:
+            current_region = self.region
+
+        if current_region:
+            x, y, w, h = current_region
             monitor = {"left": x, "top": y, "width": w, "height": h}
         else:
             monitor = self._sct.monitors[1]  # Primary monitor

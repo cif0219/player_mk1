@@ -265,15 +265,22 @@ def main():
     parser.add_argument("-c", "--config", default="config.yaml", help="Config file")
     parser.add_argument("-t", "--time", type=float, help="Run duration (seconds)")
     parser.add_argument("--objectives", nargs="+", help="Strategic objectives", default=["Defeat enemies in the central area"])
+    parser.add_argument("--dashboard", action="store_true", help="Run web dashboard on port 8000")
     args = parser.parse_args()
     
-    player = Player(config_path=args.config)
-    
-    # We always set up objectives to demonstrate the game capability
-    if args.objectives:
-        player.setup_objectives(args.objectives)
-    
-    player.run(duration_sec=args.time)
+    if args.dashboard:
+        import uvicorn
+        from dashboard import app
+        print("Starting web dashboard on http://localhost:8000")
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    else:
+        player = Player(config_path=args.config)
+
+        # We always set up objectives to demonstrate the game capability
+        if args.objectives:
+            player.setup_objectives(args.objectives)
+
+        player.run(duration_sec=args.time)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player MK1 Dashboard</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .panel { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .controls { display: flex; gap: 10px; align-items: center; }
+        select, button { padding: 8px 12px; font-size: 16px; border: none; border-radius: 4px; cursor: pointer; }
+        button { background: #007bff; color: white; }
+        button:hover { background: #0056b3; }
+        button.stop { background: #dc3545; }
+        button.stop:hover { background: #a71d2a; }
+        #video-feed { width: 100%; max-width: 1000px; border: 2px solid #333; border-radius: 4px; display: block; margin: 0 auto; }
+        .status { margin-top: 10px; font-size: 14px; color: #ccc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #333; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Player MK1 Dashboard</h1>
+    </div>
+
+    <div class="panel controls">
+        <label for="window-select">Target Window:</label>
+        <select id="window-select">
+            <option value="">-- Full Screen --</option>
+        </select>
+        <button id="btn-select">Set Target</button>
+        <span style="flex:1"></span>
+        <button id="btn-start">Start Player</button>
+        <button id="btn-stop" class="stop">Stop Player</button>
+    </div>
+
+    <div class="panel">
+        <img id="video-feed" src="" alt="Video Feed Offline" />
+        <div class="status" id="status-text">Status: Stopped</div>
+    </div>
+
+    <div class="panel">
+        <h2>Active Goals</h2>
+        <div id="goals-text">None</div>
+    </div>
+</div>
+
+<script>
+    const windowSelect = document.getElementById('window-select');
+    const btnSelect = document.getElementById('btn-select');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const videoFeed = document.getElementById('video-feed');
+    const statusText = document.getElementById('status-text');
+    const goalsText = document.getElementById('goals-text');
+
+    // Fetch windows
+    async function fetchWindows() {
+        try {
+            const res = await fetch('/api/windows');
+            const data = await res.json();
+
+            // clear existing options except the first
+            windowSelect.innerHTML = '<option value="">-- Full Screen --</option>';
+
+            data.windows.forEach(w => {
+                const opt = document.createElement('option');
+                opt.value = w.id;
+                opt.textContent = `${w.title} (${w.geometry.join(',')})`;
+                windowSelect.appendChild(opt);
+            });
+        } catch (e) {
+            console.error('Failed to fetch windows', e);
+        }
+    }
+
+    // Set target window
+    btnSelect.addEventListener('click', async () => {
+        const wid = windowSelect.value;
+        const res = await fetch('/api/select_window', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ window_id: wid })
+        });
+        const data = await res.json();
+        alert(data.message);
+    });
+
+    // Start/Stop
+    btnStart.addEventListener('click', async () => {
+        await fetch('/api/start', { method: 'POST' });
+        statusText.textContent = "Status: Running";
+    });
+
+    btnStop.addEventListener('click', async () => {
+        await fetch('/api/stop', { method: 'POST' });
+        statusText.textContent = "Status: Stopped";
+    });
+
+    // Websocket for video feed & status
+    const ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.image) {
+            videoFeed.src = 'data:image/jpeg;base64,' + data.image;
+        }
+        if (data.status) {
+            statusText.textContent = `Status: ${data.status.running ? 'Running' : 'Stopped'} | FPS: ${data.status.fps} | Goal: ${data.status.active_goal}`;
+            goalsText.textContent = data.status.pending_goals.join(', ') || 'None';
+        }
+    };
+
+    fetchWindows();
+</script>
+
+</body>
+</html>
