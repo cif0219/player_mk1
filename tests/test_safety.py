@@ -208,3 +208,15 @@ def test_blocking_flushes_the_timeline():
     dispatcher.pump(make_state(at=0.0), at=0.0)
 
     assert timeline.pending() == 0
+
+
+def test_rate_guard_reopens_once_the_window_slides():
+    """A full window must not latch: check() alone has to let old dispatches expire,
+    or the dispatcher never consumes again and the gate stays shut for the rest of the run."""
+    from player.safety.guards import RateGuard
+    guard = RateGuard(max_per_sec=3)
+    for t in (10.0, 10.1, 10.2):
+        assert guard.consume(t)
+    assert guard.check(None, 10.3).blocking
+    assert not guard.check(None, 11.25).blocking   # the first two have left the window
+    assert guard.consume(11.25)

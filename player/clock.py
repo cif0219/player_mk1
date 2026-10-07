@@ -131,6 +131,15 @@ class RateLimiter:
             self._events.append(at)
             return True
 
+    def count(self, at: float | None = None) -> int:
+        """Events still inside the window ending at `at` (trims the expired ones)."""
+        at = now() if at is None else at
+        with self._lock:
+            cutoff = at - 1.0
+            while self._events and self._events[0] < cutoff:
+                self._events.pop(0)
+            return len(self._events)
+
     def reset(self) -> None:
         with self._lock:
             self._events.clear()

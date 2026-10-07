@@ -52,6 +52,15 @@ def guard_lead_ms(weight):
     """
     window = PARRY_LIGHT_MS + (PARRY_HEAVY_MS - PARRY_LIGHT_MS) * max(0., min(1., weight))
     return min(320., window * .6)
+# 天晴 (learned from watching the cut, docs/SAMURAI_BATTLE.md): he dashes to put his
+# target 3.4 m in front, then the blade comes down over the target's head and past it.
+# Swinging steeply up and a little away from him meets the descending blade through
+# its last ~155 ms; the clash only opens on the final 180 ms. A hand releases its
+# windup after the press, and the transport adds latency: press this far ahead.
+TENSEI_AIM_BACK, TENSEI_AIM_UP = .5, 3.0
+TENSEI_PRESS_LEAD = (110., 165.)
+# Finale phases in which the bound ring holds everyone inside it still.
+ROOTED_PHASES = ("bind", "dash", "prayer1", "prayer2", "dark", "cut")
 UNGUARDABLE = {"warden_draw2", "warden_wave", "warden_tachikaze", "warden_tachikaze_wave", "warden_palm", "warden_palm2", "warden_cloud", "warden_charge"}
 
 
@@ -105,8 +114,6 @@ class SamuraiTactics:
     route_key: tuple = ()
     last_direction: tuple[float, float] = (0, 0)
     last_snapshot: float = -1
-    last_blade: tuple[float, dict] | None = None
-    previous_blade: tuple[float, dict] | None = None
     last_steer_at: float = -math.inf
     threat_key: tuple = ()
     blocked: tuple[float, float] = (0., 0.)
@@ -433,6 +440,26 @@ class SamuraiTactics:
         self.last_direction = direction
         return direction
 
+    def tensei_aim(self, pos, me, boss, blade, stage):
+        """Where to swing at 天晴's blade, from what is on screen.
+
+        Before contact: the learned line (steeply up, a little away from him) that the
+        descending blade crosses. Once the clash holds the blade, the main target keeps
+        that line (the frozen blade still lies on it); others aim at the held blade.
+        """
+        eye = {"x": pos[0], "y": float(me.get("y", 0)) + 1.5, "z": pos[1]}
+        away = (pos[0] - float(boss["x"]), pos[1] - float(boss["z"]))
+        length = math.hypot(*away)
+        if stage == "clash" and blade and length > 4.5:
+            target = dict(blade.get("center") or blade["a"])
+        elif length > .3:
+            target = {"x": pos[0] + away[0] / length * TENSEI_AIM_BACK, "y": float(me.get("y", 0)) + TENSEI_AIM_UP,
+                      "z": pos[1] + away[1] / length * TENSEI_AIM_BACK}
+        else:
+            return None
+        dx, dy, dz = target["x"] - eye["x"], target["y"] - eye["y"], target["z"] - eye["z"]
+        return {"yaw": math.atan2(-dx, -dz), "pitch": math.atan2(-dy, math.hypot(dx, dz)), "point": target}
+
     def decide(self, snapshot: Mapping[str, Any], role=None):
         me = snapshot.get("self") or {}
         if snapshot.get("zone") not in ("samurai_phase", "trial_warden"):
@@ -463,11 +490,9 @@ class SamuraiTactics:
         age = max(0., now - float(challenge.get("receivedAt", now)))
         remaining = float(tensei.get("remainingMs", 99999)) - age
         stage = tensei.get("stage", "")
-        rooted = fp in ("bind", "dash", "prayer", "dark", "cut", "clash") and distance(pos, point(finale.get("center") or boss)) <= float(finale.get("radius", 18))
+        rooted = fp in ROOTED_PHASES and distance(pos, point(finale.get("center") or boss)) <= float(finale.get("radius", 18))
         attack = next((t for t in snapshot.get("telegraphs", []) if t.get("attackId") == "warden_tensei" and not t.get("landed")), None)
         visible_blade = (attack or {}).get("blade") or boss.get("blade")
-        if visible_blade and (self.last_blade is None or now > self.last_blade[0]):
-            self.previous_blade, self.last_blade = self.last_blade, (now, visible_blade)
         if attack and stage != "clash":
             remaining = float(attack.get("landInMs", remaining))
         # The assigned engine holder remains in melee, outside the main target's
@@ -566,39 +591,33 @@ class SamuraiTactics:
             cmds.append({"op": "use", "itemId": "holy_water_supreme", "targetId": int(boss["entityId"])})
         if not imminent and ready("provoke") and (holder or keepsake) and self.claim("provoke", now, 1600):
             cmds.append({"op": "skill", "skillId": "provoke", "targetId": int(victim["entityId"])})
-        # Reserve the blade and skills through the final 1.2s. The visible hand
-        # action supplies its windup; start early enough to land inside the
-        # final 180ms with a 50ms transport/tick allowance. Allies wait for clash.
+        # Reserve the blade and skills through the final 1.2s. The main target opens
+        # the clash with a swing released inside the last 180 ms; once it is open,
+        # every ready hand and skill on the held blade counts (650 ms window).
         hands = list((snapshot.get("hands") or {}).values())
         hand = next((h for h in hands if float(h.get("weight", 0)) >= .4 and float(h.get("readyInMs", 0)) <= 0), None)
         windup = float((hand or {}).get("windupMs", 180))
-        finale_attack = (main and stage in ("pressure", "timing") and windup + 115 <= remaining <= windup + 180) or stage == "clash"
+        opening = main and stage in ("pressure", "timing") and windup + TENSEI_PRESS_LEAD[0] <= remaining <= windup + TENSEI_PRESS_LEAD[1]
+        finale_attack = opening or stage == "clash"
         if finale_attack and (not holder or not engine):
-            blade = visible_blade
-            if blade and hand and self.claim("clash:" + cast + ":" + str(stage), now, 900):
-                a, b = dict(blade["a"]), dict(blade["b"])
-                # Visual tracking only: estimate motion from two samples that
-                # have already arrived. No rig sampling at a future timestamp.
-                if self.previous_blade and 0 < now - self.previous_blade[0] <= 150 and stage != "clash":
-                    previous_at, previous = self.previous_blade
-                    for end_name, end in (("a", a), ("b", b)):
-                        for axis in ("x", "y", "z"):
-                            delta = (end[axis] - previous[end_name][axis]) * (windup + 50) / (now - previous_at)
-                            end[axis] += max(-1.2, min(1.2, delta))
-                # Aim at the nearest visible blade segment, not at a claimed
-                # part id: the ordinary server raycast still decides contact.
-                eye = {"x": pos[0], "y": float(me.get("y", 0)) + 1.6, "z": pos[1]}
-                vec = {k: b[k] - a[k] for k in ("x", "y", "z")}
-                u = max(.15, min(.85, sum((eye[k] - a[k]) * vec[k] for k in vec) / max(.001, sum(v*v for v in vec.values()))))
-                aim_point = {k: a[k] + vec[k] * u for k in vec}
-                dx, dy, dz = aim_point["x"] - eye["x"], aim_point["y"] - eye["y"], aim_point["z"] - eye["z"]
-                aim = {"yaw": math.atan2(-dx, -dz), "pitch": math.atan2(-dy, math.hypot(dx, dz)), "point": aim_point}
-                cmds += [{"op": "guard", "active": False}, {"op": "face", "yaw": aim["yaw"], "pitch": aim["pitch"]},
-                         {"op": "attack", "hand": hand.get("hand", "left"), "targetId": int(boss["entityId"]), "aim": aim}]
-                if stage == "clash" and ready("iron_cleave"):
-                    cmds.append({"op": "skill", "skillId": "iron_cleave", "targetId": int(boss["entityId"]), "aim": aim})
-            elif not blade or not hand:
-                self.stats["clash_missing_visible_blade_or_weight"] = self.stats.get("clash_missing_visible_blade_or_weight", 0) + 1
+            aim = self.tensei_aim(pos, me, boss, visible_blade, stage)
+            if stage == "clash" and aim is not None:
+                self.stats["clash_open_seen"] = self.stats.get("clash_open_seen", 0) + 1
+            # No targetId, and face along the aim line (not the boss) in the same batch: the
+            # gateway adds the faced entity as the target, and a locked target sends the
+            # server's ray to his chest instead of the blade.
+            swings = []
+            if aim and hand and self.claim("clash:" + cast + ":" + str(stage) + ":" + str(hand.get("hand")), now, 900):
+                self.stats["clash_swings"] = self.stats.get("clash_swings", 0) + 1
+                swings.append({"op": "attack", "hand": hand.get("hand", "left"), "aim": aim})
+            # The swing's own recovery still locks the hands right after it lands ("casting"):
+            # keep offering the cleave until it is accepted and its cooldown shows.
+            if aim and stage == "clash" and ready("iron_cleave") and self.claim("clash-cleave:" + cast, now, 120):
+                swings.append({"op": "skill", "skillId": "iron_cleave", "aim": aim})
+            if swings:
+                cmds += [{"op": "guard", "active": False}, {"op": "face", "yaw": aim["yaw"], "pitch": aim["pitch"]}, *swings]
+            if not aim or not hand:
+                self.stats["clash_missing_aim_or_hand"] = self.stats.get("clash_missing_aim_or_hand", 0) + 1
         elif (not imminent and not incoming and now >= self.guard_until and not (fp and fp != "gather" and remaining < 1200)
               and distance(pos, dest) <= 2.9 and self.punish_window(snapshot, victim, now)):
             # P1/P2 hits maintain normal threat even outside opening; only the

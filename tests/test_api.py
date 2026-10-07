@@ -722,3 +722,64 @@ def test_samurai_circles_before_a_great_serpent_cut():
     d = SamuraiTactics().circle_before_serpent((64., 66.5), tells, ents)
     assert d is not None and abs(d[1]) < .01  # tangent to the radius (+z)
     assert SamuraiTactics().circle_before_serpent((64., 66.5), [dict(tells[0], landInMs=1500)], ents) is None
+
+
+def _tensei_snapshot(remaining, stage="timing", fp="dark", hand_ready=True):
+    """The main target 3.4 m in front of the Warden during 天晴, as the gateway shows it."""
+    return {
+        "t": 10_000, "zone": "trial_warden", "roomId": "r",
+        "self": {"entityId": 7, "x": 64.0, "y": 67.0, "z": 60.6},
+        "entities": [{"entityId": 1, "mobId": "ironclad_warden", "type": "mob", "x": 64.0, "y": 67.0, "z": 64.0, "alive": True},
+                     {"entityId": 7, "type": "player", "x": 64.0, "y": 67.0, "z": 60.6, "alive": True}],
+        "boss": {"entityId": 1, "phase": "casting", "attempt": 1, "receivedAt": 10_000,
+                 "samurai": {"finale": {"phase": fp, "castId": 1, "targetId": 7, "center": {"x": 64, "z": 64}, "radius": 18},
+                             "tensei": {"stage": stage, "targetId": 7, "remainingMs": remaining}}},
+        "telegraphs": [{"attackId": "warden_tensei", "entityId": 1, "landInMs": remaining, "landed": False, "weight": 1, "startedAt": 5000}],
+        "markers": [], "unlocked": ["iron_cleave"], "skills": {"iron_cleave": {"readyInMs": 0}},
+        "hands": {"left": {"hand": "left", "weight": .4, "windupMs": 180, "readyInMs": 0 if hand_ready else 400}},
+    }
+
+
+def test_samurai_tensei_opening_swing_aims_up_and_away_without_a_target_lock():
+    """The opener releases inside the last 180 ms, along the learned up-and-away line, with no targetId
+    (a locked target would aim the server's ray at his chest instead of the blade)."""
+    from games.fancraft.samurai import SamuraiTactics, TENSEI_PRESS_LEAD, TENSEI_AIM_UP
+    early = SamuraiTactics().decide(_tensei_snapshot(180 + TENSEI_PRESS_LEAD[1] + 60))
+    assert not [c for c in early if c["op"] == "attack"]
+    cmds = SamuraiTactics().decide(_tensei_snapshot(180 + 130))
+    attacks = [c for c in cmds if c["op"] == "attack"]
+    assert len(attacks) == 1 and "targetId" not in attacks[0]
+    p = attacks[0]["aim"]["point"]
+    assert p["z"] < 60.6 and abs(p["x"] - 64) < 1e-9          # away from him (he is at +z), on his facing line
+    assert abs(p["y"] - (67 + TENSEI_AIM_UP)) < 1e-9
+    assert attacks[0]["aim"]["pitch"] < -1                      # steeply up (gateway pitch: negative looks up)
+    faces = [c for c in cmds if c["op"] == "face"]
+    assert faces[-1].get("entityId") is None                    # the last face clears any entity lock
+
+
+def test_samurai_tensei_clash_keeps_swinging_every_ready_hand_and_skill():
+    from games.fancraft.samurai import SamuraiTactics
+    tactics = SamuraiTactics()
+    cmds = tactics.decide(_tensei_snapshot(500, stage="clash", fp="cut"))
+    assert [c["op"] for c in cmds if c["op"] in ("attack", "skill")] == ["attack", "skill"]
+    assert all("targetId" not in c for c in cmds if c["op"] in ("attack", "skill"))
+    # A hand still recovering is not pressed; the cleave is not resent within 120 ms...
+    again = tactics.decide(dict(_tensei_snapshot(450, stage="clash", fp="cut", hand_ready=False), t=10_050))
+    assert not [c for c in again if c["op"] in ("attack", "skill")]
+    # ...but is offered again while the server still refuses it (the swing's recovery locks the hands)
+    retry = tactics.decide(dict(_tensei_snapshot(350, stage="clash", fp="cut", hand_ready=False), t=10_150))
+    assert [c["skillId"] for c in retry if c["op"] == "skill"] == ["iron_cleave"]
+    # A cleave-only batch still turns off the boss first: the gateway would otherwise lock him as its target
+    before = retry[:[c["op"] for c in retry].index("skill")]
+    assert [c for c in before if c["op"] == "face"][-1].get("entityId") is None
+    spent = _tensei_snapshot(300, stage="clash", fp="cut", hand_ready=False)
+    spent["skills"]["iron_cleave"]["readyInMs"] = 5000
+    assert not [c for c in tactics.decide(dict(spent, t=10_300)) if c["op"] == "skill"]
+
+
+def test_samurai_holds_still_in_every_bound_finale_phase():
+    from games.fancraft.samurai import SamuraiTactics, ROOTED_PHASES
+    for fp in ROOTED_PHASES:
+        cmds = SamuraiTactics().decide(_tensei_snapshot(3000, stage="pressure", fp=fp))
+        moves = [c for c in cmds if c["op"] == "move"]
+        assert moves and all(m["forward"] == 0 and m["strafe"] == 0 for m in moves), fp

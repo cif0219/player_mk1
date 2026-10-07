@@ -133,9 +133,10 @@ class RateGuard:
         self._limiter = RateLimiter(self.max_per_sec)
 
     def check(self, state: WorldState | None, at: float) -> GuardStatus:
-        # Read-only probe: `consume` is what actually spends budget, called by the
-        # dispatcher once it commits to sending.
-        if len(self._limiter._events) >= self.max_per_sec:  # noqa: SLF001
+        # Probe only: `consume` is what actually spends budget, called by the
+        # dispatcher once it commits to sending. The probe must let the window
+        # slide, or a full window would block every later consume and never empty.
+        if self._limiter.count(at) >= self.max_per_sec:
             return GuardStatus(self.name, True, f"> {self.max_per_sec}/s")
         return GuardStatus(self.name, False)
 
