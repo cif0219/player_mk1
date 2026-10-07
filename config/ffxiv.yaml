@@ -1,0 +1,73 @@
+# player_mk1 — FFXIV configuration
+#
+# Read docs/SAFETY.md before setting dry_run to false.
+
+game: ffxiv
+
+runtime:
+  dry_run: true          # perceive and decide, dispatch nothing. Start here.
+  capture_fps: 60
+  status_interval_s: 5.0
+  max_runtime_s: null    # null = until stopped
+
+capture:
+  downscale: 1.0         # 1.0 until a measured latency budget says otherwise
+
+ffxiv:
+  # Written by `python -m player calibrate --game ffxiv`. The built-in defaults are
+  # placeholders and will not read your HUD correctly.
+  layout_path: config/ffxiv.layout.json
+
+  job: blm
+  # Start on dummy_safe: two buttons, no gauge dependency, so a failure means the
+  # pipeline is broken rather than that the gauge probes need calibrating.
+  rotation: blm.dummy_safe
+  gcd_recast_s: 2.5
+
+  # Path to a trained telegraph detector. Absent -> HSV segmentation fallback, and the
+  # ground_aoe reflex group disables itself.
+  detector_model: null
+
+  dodge_key: back
+  potion_hp_threshold: 0.35
+
+  keys:
+    fire4: "1"
+    blizzard4: "2"
+    fire3: "3"
+    blizzard3: "4"
+    thunder: "5"
+    despair: "6"
+    paradox: "7"
+    manafont: "8"
+    triplecast: "9"
+    ley_lines: "0"
+    amplifier: "minus"
+    swiftcast: "equals"
+    forward: "w"
+    back: "s"
+    left: "a"
+    right: "d"
+
+safety:
+  kill_key: f12          # global low-level hook; works even when the game has focus
+  pause_key: f11
+  max_actions_per_sec: 20
+  max_state_age_ms: 250
+  min_confidence: 0.5
+  require_foreground: true
+  takeover_cooldown_ms: 1500
+
+record:
+  enabled: true          # recordings are the development loop, not a debugging extra
+  root: sessions
+  frame_every_n: 2       # 30Hz of frames from a 60Hz capture
+  jpeg_quality: 80
+
+director:
+  enabled: false         # opt in explicitly; it costs money
+  model: claude-opus-5
+  effort: low            # triage, not deep reasoning
+  min_interval_s: 5.0
+  screenshot_every_n_calls: 3
+  max_output_tokens_per_session: 60000

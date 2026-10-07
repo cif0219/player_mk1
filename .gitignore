@@ -2,6 +2,21 @@
 __pycache__/
 *.pyc
 *.pyo
-frames/
-test_capture.png
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Recorded sessions: large, machine-specific, and regenerable. Commit a small curated
+# fixture under tests/fixtures/ instead if you need one in version control.
+sessions/
+
+# Calibration is per-installation, per-resolution. Commit yours if you want it; the
+# default ignore keeps someone else's HUD out of the repo.
+config/*.layout.json
+
+# Trained detector weights.
+models/
+*.onnx
+
 .env

@@ -1,0 +1,53 @@
+# player_mk1 — FantCraft over the agent gateway: the Ironclad Warden
+#
+# API control (docs/PLAYTEST.md §6 over in fancraft). No screen, no window:
+# the tester reads a structured snapshot from the game's gateway and sends
+# intents back through it. Bring-up:
+#
+#   1. Game server:        cd D:/projects/fancraft && npm run dev:server
+#   2. Agent gateway:      npm run agent:gateway   (ws://127.0.0.1:10190 → :10181)
+#   3. This tester:        python -m player run --config config/fancraft-warden.yaml -t 240
+#
+# `npm run smoke:warden-bot` in fancraft does all three against an isolated
+# server and asserts how far the fight got.
+
+game: fancraft
+
+runtime:
+  dry_run: false         # intents reach the gateway; --dry-run still works and decides only
+  capture_fps: 60
+  status_interval_s: 5.0
+  max_runtime_s: 240
+
+fancraft:
+  control: api
+  gateway_url: "ws://127.0.0.1:10190"
+  # Account + character the gateway logs in as (registered on first use).
+  username: "warden_bot"
+  password: "warden-bot-123"
+  character: ""          # empty: the account's first character, created if none
+  zone: trial_warden     # the Trial Warden's Iron Dojo: the same script, no world clear
+  # Dev commands sent once in-world (the isolated smokes use the same ones).
+  setup_commands:
+    - "/job guardian"
+    - "/skill * 30"
+  # parry: a fresh guard 100 ms before each cut lands (the defence job's answer)
+  # dodge: sprint out of reach instead (what a non-defence job does)
+  tactic: parry
+
+safety:
+  kill_key: f12
+  pause_key: f10
+  max_actions_per_sec: 40  # a parry is two events; a dodge four
+  max_state_age_ms: 250    # the gateway streams every 50 ms
+  min_confidence: 0.5
+  require_foreground: false
+  takeover_cooldown_ms: 1500
+
+record:
+  enabled: true
+  root: sessions
+  frame_every_n: 1
+
+director:
+  enabled: false

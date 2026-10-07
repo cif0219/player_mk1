@@ -1,0 +1,75 @@
+# player_mk1 — FantCraft configuration
+#
+# FantCraft is our own game (D:/projects/fancraft) and this player is its
+# automated playtester — no ToS caveat applies for once. Full loop:
+#
+#   1. Server with the oracle:   FANCRAFT_PLAYTEST=1 npm run dev:server
+#   2. Client with the bridge:   http://localhost:10180/?playtest=1  (F11 fullscreen!)
+#   3. Open a truth session:     curl -X POST localhost:10181/playtest/start
+#   4. Point manifest_path at the session's manifest.json, then:
+#        python -m player run --config config/fancraft.yaml --dry-run
+#   5. Score perception vs truth: python -m tools.fancraft_report --help
+
+# For the screen-free path (the game's agent gateway, the Ironclad Warden
+# tactics) see config/fancraft-warden.yaml — `fancraft.control: api`.
+
+game: fancraft
+
+runtime:
+  dry_run: true          # perceive and decide, dispatch nothing. Start here.
+  capture_fps: 60
+  status_interval_s: 5.0
+  max_runtime_s: null
+
+capture:
+  downscale: 1.0
+
+fancraft:
+  # Browser tab title is "FantCraft — Aethermoor"; substring match.
+  window_title: "FantCraft"
+
+  # Written by the game's playtest bridge once a session is started:
+  #   D:/projects/fancraft/var/playtest/<session>/manifest.json
+  # Leave null to fall back to estimated defaults (smoke-run quality only).
+  manifest_path: null
+
+  # Which job the character has selected in-game. Drives the fallback
+  # hotbar mapping; irrelevant once a manifest is loaded (the manifest
+  # says which ability is on which key).
+  job: guardian
+
+  # fancraft.pipeline  — iron_cleave only; proves the loop end to end
+  # fancraft.guardian  — shield_bash weave + iron_cleave filler
+  # fancraft.luminary  — self-heal under 60% HP, starfire filler
+  rotation: fancraft.pipeline
+
+  retreat_hp_threshold: 0.25
+
+safety:
+  kill_key: f12
+  pause_key: f10        # not f11 — that's browser fullscreen, which the layout requires
+  max_actions_per_sec: 20
+  max_state_age_ms: 250
+  min_confidence: 0.5
+  require_foreground: true
+  takeover_cooldown_ms: 1500
+
+record:
+  enabled: true
+  root: sessions
+  frame_every_n: 2
+  jpeg_quality: 80
+
+# The strategic layer runs on the local Hermes SLM (host0 over Tailscale) —
+# an OpenAI-compatible server, so reviews cost nothing and stay on the LAN.
+# Text-only: the openai provider sends state summaries, never screenshots.
+director:
+  enabled: true
+  provider: openai
+  base_url: "http://100.76.123.84:8000/v1"   # host0 (see ~/.ssh/config)
+  model: "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive"
+  disable_thinking: true      # reasoning burns the whole budget on SLMs
+  request_timeout_s: 90.0     # local MoE inference is not fast; don't give up early
+  min_interval_s: 15.0
+  screenshot_every_n_calls: 0
+  max_output_tokens_per_session: 60000

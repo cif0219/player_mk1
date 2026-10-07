@@ -1,0 +1,76 @@
+# player_mk1 — Genshin Impact configuration
+#
+# Read docs/SAFETY.md before setting dry_run to false. HoYoverse's Terms of Service
+# prohibit third-party gameplay automation and accounts are suspended for it; running
+# this against a live account is your decision and your risk.
+
+game: genshin
+
+runtime:
+  dry_run: true          # perceive and decide, dispatch nothing. Start here.
+  capture_fps: 60
+  status_interval_s: 5.0
+  max_runtime_s: null    # null = until stopped
+
+capture:
+  downscale: 1.0
+
+genshin:
+  # The client window is titled in its own language: "Genshin Impact" (global), 原神 (CN/TW).
+  window_title: "原神"
+
+  # Written by `python -m player calibrate --game genshin`. Genshin's HUD is fixed, so
+  # the built-in defaults are close at any 16:9 resolution — but verify before trusting.
+  layout_path: config/genshin.layout.json
+
+  # Start on attack_only: one unconditional button, so a failure means the pipeline is
+  # broken rather than that the cooldown probes need calibrating. Then genshin.solo
+  # (burst > skill > normal attack), or genshin.charged for charged-attack filler.
+  rotation: genshin.attack_only
+
+  # Pacing between decisions — our own clock, since Genshin has no GCD to read.
+  attack_interval_s: 0.6
+
+  # Cooldowns for YOUR on-field character; the defaults are generic mid-range values.
+  # A wrong value misconverts the cooldown probe: harmless, but the planner wastes
+  # presses into cooldowns.
+  skill_cooldown_s: 8.0
+  burst_cooldown_s: 15.0
+
+  dash_hp_threshold: 0.4     # dash (i-frames) below this HP fraction
+  retreat_hp_threshold: 0.2  # dash + back off below this
+
+  keys:
+    normal_attack: "mouse1"  # left mouse; not rebindable in game
+    charged_attack: "mouse1"
+    skill: "e"
+    burst: "q"
+    sprint: "shift"
+    jump: "space"
+    forward: "w"
+    back: "s"
+    left: "a"
+    right: "d"
+
+safety:
+  kill_key: f12
+  pause_key: f11
+  max_actions_per_sec: 20
+  max_state_age_ms: 250
+  min_confidence: 0.5
+  require_foreground: true
+  takeover_cooldown_ms: 1500
+
+record:
+  enabled: true
+  root: sessions
+  frame_every_n: 2
+  jpeg_quality: 80
+
+director:
+  enabled: false         # opt in explicitly; it costs money
+  model: claude-opus-5
+  effort: low
+  min_interval_s: 5.0
+  screenshot_every_n_calls: 3
+  max_output_tokens_per_session: 60000

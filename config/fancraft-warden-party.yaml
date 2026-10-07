@@ -1,0 +1,50 @@
+# player_mk1 — two characters against the Ironclad Warden, one command
+#
+# The mount is a two-person mechanic: someone must hold threat on the horse
+# while someone else answers the Warden. `fancraft.party` runs one runtime per
+# member in this process; the first member creates the dojo, the second joins
+# it by room id. Each member is the base `fancraft` config plus overrides.
+#
+#   python -m player run --config config/fancraft-warden-party.yaml -t 240
+
+game: fancraft
+
+runtime:
+  dry_run: false
+  capture_fps: 60
+  status_interval_s: 5.0
+  max_runtime_s: 240
+
+fancraft:
+  control: api
+  gateway_url: "ws://127.0.0.1:10190"
+  username: "warden_party"
+  password: "warden-bot-123"
+  zone: trial_warden
+  setup_commands:
+    - "/job guardian"
+    - "/skill * 30"
+  dodge_chance: 0.5
+  party:
+    - name: samurai        # takes the Warden: parry, evade, cover, holy water
+      task: samurai
+    - name: horse          # holds the mechanical horse: provoke, kite, strike
+      task: hold_horse
+      shopping: {}         # no bottle needed on the horse
+
+safety:
+  kill_key: f12
+  pause_key: f10
+  max_actions_per_sec: 40
+  max_state_age_ms: 250
+  min_confidence: 0.5
+  require_foreground: false
+  takeover_cooldown_ms: 1500
+
+record:
+  enabled: true
+  root: sessions
+  frame_every_n: 1
+
+director:
+  enabled: false
